@@ -1,0 +1,533 @@
+---
+sidebar_position: 2
+title: Nodes, Topics, and Services
+description: Understanding ROS 2 communication patterns - topics for streaming data and services for request-reply
+---
+
+# Nodes, Topics, and Services
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Design node architectures following ROS 2 best practices
+- Implement publishers and subscribers with custom message types
+- Create service servers and clients for request-reply communication
+- Configure Quality of Service (QoS) settings for reliable communication
+- Debug communication issues using ROS 2 introspection tools
+
+## Prerequisites
+
+- Completed Chapter 1: Introduction to ROS 2
+- Understanding of Python classes and callbacks
+- Familiarity with asynchronous programming concepts
+
+---
+
+## Node Design Principles
+
+### Single Responsibility
+
+Each node should have a **single, well-defined purpose**:
+
+```
+✅ Good: camera_driver, object_detector, navigation_controller
+❌ Bad:  robot_node (does everything)
+```
+
+### Composition over Inheritance
+
+ROS 2 supports **component nodes** that can run in the same process:
+
+```
+┌─────────────────────────────────┐
+│         Container Process       │
+│  ┌─────────┐  ┌─────────────┐  │
+│  │ Camera  │  │  Detector   │  │
+│  │  Node   │  │    Node     │  │
+│  └─────────┘  └─────────────┘  │
+└─────────────────────────────────┘
+        vs.
+┌─────────┐     ┌─────────────┐
+│ Camera  │     │  Detector   │
+│ Process │     │   Process   │
+└─────────┘     └─────────────┘
+```
+
+**Benefits of composition:**
+- Zero-copy message passing within process
+- Reduced memory footprint
+- Easier lifecycle management
+
+---
+
+## Topics: Publish-Subscribe Communication
+
+### When to Use Topics
+
+Topics are ideal for:
+- **Continuous data streams**: Sensor readings, robot state
+- **One-to-many communication**: Multiple nodes need the same data
+- **Decoupled systems**: Publisher doesn't need to know about subscribers
+
+### Custom Message Types
+
+Create a custom message for robot status:
+
+```bash title="Terminal"
+# Create interfaces package
+ros2 pkg create --build-type ament_cmake robot_interfaces \
+    --dependencies rosidl_default_generators
+```
+
+```text title="robot_interfaces/msg/RobotStatus.msg"
+# Header with timestamp
+std_msgs/Header header
+
+# Robot identification
+string robot_name
+string robot_id
+
+# State information
+string state            # IDLE, MOVING, ERROR
+float64 battery_level   # 0.0 to 100.0
+bool emergency_stop
+
+# Position (simplified)
+float64 x
+float64 y
+float64 theta
+```
+
+```cmake title="robot_interfaces/CMakeLists.txt (additions)"
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/RobotStatus.msg"
+  DEPENDENCIES std_msgs
+)
+```
+
+### Publisher with Custom Message
+
+```python title="robot_monitor/status_publisher.py"
+import rclpy
+from rclpy.node import Node
+from robot_interfaces.msg import RobotStatus
+from std_msgs.msg import Header
+
+
+class RobotStatusPublisher(Node):
+    """Publishes robot status at regular intervals."""
+
+    def __init__(self):
+        super().__init__('robot_status_publisher')
+        
+        # Declare parameters
+        self.declare_parameter('robot_name', 'robot_1')
+        self.declare_parameter('publish_rate', 10.0)
+        
+        # Get parameters
+        self.robot_name = self.get_parameter('robot_name').value
+        rate = self.get_parameter('publish_rate').value
+        
+        # Create publisher
+        self.publisher = self.create_publisher(
+            RobotStatus,
+            '/robot_status',
+            10
+        )
+        
+        # Create timer
+        self.timer = self.create_timer(1.0 / rate, self.publish_status)
+        
+        # Internal state
+        self.battery = 100.0
+        self.state = 'IDLE'
+        
+        self.get_logger().info(f'Status publisher started for {self.robot_name}')
+
+    def publish_status(self):
+        """Publish current robot status."""
+        msg = RobotStatus()
+        
+        # Fill header
+        msg.header = Header()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'base_link'
+        
+        # Fill status
+        msg.robot_name = self.robot_name
+        msg.robot_id = 'robot_001'
+        msg.state = self.state
+        msg.battery_level = self.battery
+        msg.emergency_stop = False
+        msg.x = 0.0
+        msg.y = 0.0
+        msg.theta = 0.0
+        
+        self.publisher.publish(msg)
+        
+        # Simulate battery drain
+        self.battery = max(0.0, self.battery - 0.01)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = RobotStatusPublisher()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+```
+
+### Subscriber with Callback
+
+```python title="robot_monitor/status_monitor.py"
+import rclpy
+from rclpy.node import Node
+from robot_interfaces.msg import RobotStatus
+
+
+class RobotStatusMonitor(Node):
+    """Monitors robot status and raises alerts."""
+
+    def __init__(self):
+        super().__init__('robot_status_monitor')
+        
+        self.declare_parameter('low_battery_threshold', 20.0)
+        self.low_battery = self.get_parameter('low_battery_threshold').value
+        
+        self.subscription = self.create_subscription(
+            RobotStatus,
+            '/robot_status',
+            self.status_callback,
+            10
+        )
+        
+        self.last_status = None
+
+    def status_callback(self, msg: RobotStatus):
+        """Process incoming status messages."""
+        self.last_status = msg
+        
+        # Check for alerts
+        if msg.battery_level < self.low_battery:
+            self.get_logger().warn(
+                f'⚠️ Low battery: {msg.battery_level:.1f}%'
+            )
+        
+        if msg.emergency_stop:
+            self.get_logger().error('🛑 EMERGENCY STOP ACTIVE')
+        
+        if msg.state == 'ERROR':
+            self.get_logger().error(f'Robot {msg.robot_name} in ERROR state')
+```
+
+---
+
+## Quality of Service (QoS)
+
+### QoS Profiles
+
+QoS settings control message delivery guarantees:
+
+```python title="QoS Configuration"
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+
+# Sensor data: best effort, keep latest
+sensor_qos = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=5
+)
+
+# Configuration data: reliable, transient local
+config_qos = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=10
+)
+```
+
+### Common QoS Profiles
+
+| Profile | Reliability | Durability | Use Case |
+|---------|-------------|------------|----------|
+| `sensor_data` | Best effort | Volatile | Camera, LiDAR |
+| `parameters` | Reliable | Volatile | Configuration |
+| `services` | Reliable | Volatile | Service calls |
+| `system_default` | Reliable | Volatile | General use |
+
+### QoS Compatibility
+
+Publishers and subscribers must have **compatible** QoS:
+
+```
+Publisher: RELIABLE + TRANSIENT_LOCAL
+    ✅ Subscriber: RELIABLE + VOLATILE (compatible)
+    ✅ Subscriber: BEST_EFFORT + VOLATILE (compatible)
+    ❌ Subscriber: RELIABLE + TRANSIENT_LOCAL (ok)
+
+Publisher: BEST_EFFORT + VOLATILE
+    ❌ Subscriber: RELIABLE + any (incompatible!)
+```
+
+---
+
+## Services: Request-Reply Communication
+
+### When to Use Services
+
+Services are ideal for:
+- **One-time requests**: Get current state, spawn object
+- **Synchronous operations**: Need immediate response
+- **Configuration changes**: Set parameters, trigger actions
+
+### Defining a Service
+
+```text title="robot_interfaces/srv/SetRobotState.srv"
+# Request
+string desired_state    # IDLE, MOVING, CHARGING
+
+---
+# Response
+bool success
+string message
+string previous_state
+```
+
+### Service Server
+
+```python title="robot_controller/state_server.py"
+import rclpy
+from rclpy.node import Node
+from robot_interfaces.srv import SetRobotState
+
+
+class RobotStateServer(Node):
+    """Service server for changing robot state."""
+
+    VALID_STATES = {'IDLE', 'MOVING', 'CHARGING', 'ERROR'}
+
+    def __init__(self):
+        super().__init__('robot_state_server')
+        
+        self.current_state = 'IDLE'
+        
+        self.srv = self.create_service(
+            SetRobotState,
+            '/set_robot_state',
+            self.set_state_callback
+        )
+        
+        self.get_logger().info('Robot state server ready')
+
+    def set_state_callback(
+        self, 
+        request: SetRobotState.Request,
+        response: SetRobotState.Response
+    ) -> SetRobotState.Response:
+        """Handle state change requests."""
+        
+        desired = request.desired_state.upper()
+        
+        if desired not in self.VALID_STATES:
+            response.success = False
+            response.message = f'Invalid state: {desired}. Valid: {self.VALID_STATES}'
+            response.previous_state = self.current_state
+            self.get_logger().warn(response.message)
+            return response
+        
+        # Store previous state
+        response.previous_state = self.current_state
+        
+        # Transition logic
+        if self.current_state == 'ERROR' and desired != 'IDLE':
+            response.success = False
+            response.message = 'Must reset to IDLE before changing state from ERROR'
+            return response
+        
+        # Apply state change
+        self.current_state = desired
+        response.success = True
+        response.message = f'State changed to {desired}'
+        
+        self.get_logger().info(
+            f'State: {response.previous_state} → {desired}'
+        )
+        
+        return response
+```
+
+### Service Client
+
+```python title="robot_controller/state_client.py"
+import rclpy
+from rclpy.node import Node
+from robot_interfaces.srv import SetRobotState
+
+
+class RobotStateClient(Node):
+    """Service client for requesting state changes."""
+
+    def __init__(self):
+        super().__init__('robot_state_client')
+        
+        self.client = self.create_client(
+            SetRobotState,
+            '/set_robot_state'
+        )
+        
+        # Wait for service to be available
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Waiting for service...')
+        
+        self.get_logger().info('Service available')
+
+    def send_request(self, desired_state: str):
+        """Send state change request."""
+        request = SetRobotState.Request()
+        request.desired_state = desired_state
+        
+        self.get_logger().info(f'Requesting state: {desired_state}')
+        
+        # Async call
+        future = self.client.call_async(request)
+        return future
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    client = RobotStateClient()
+    future = client.send_request('MOVING')
+    
+    # Spin until response
+    rclpy.spin_until_future_complete(client, future)
+    
+    response = future.result()
+    if response.success:
+        client.get_logger().info(f'✅ {response.message}')
+    else:
+        client.get_logger().error(f'❌ {response.message}')
+    
+    client.destroy_node()
+    rclpy.shutdown()
+```
+
+---
+
+## Debugging Communication
+
+### Topic Debugging
+
+```bash title="Terminal"
+# List all topics
+ros2 topic list
+
+# Show topic details
+ros2 topic info /robot_status --verbose
+
+# Echo messages
+ros2 topic echo /robot_status
+
+# Monitor bandwidth
+ros2 topic bw /robot_status
+
+# Check publishing frequency
+ros2 topic hz /robot_status
+```
+
+### Service Debugging
+
+```bash title="Terminal"
+# List services
+ros2 service list
+
+# Show service type
+ros2 service type /set_robot_state
+
+# Call service from CLI
+ros2 service call /set_robot_state robot_interfaces/srv/SetRobotState \
+    "{desired_state: 'MOVING'}"
+```
+
+### Graph Visualization
+
+```bash title="Terminal"
+# View node graph
+ros2 run rqt_graph rqt_graph
+
+# View in terminal
+ros2 node list
+ros2 topic list
+ros2 service list
+```
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ Nodes should follow single responsibility principle
+- ✅ Topics are for continuous, one-to-many data streams
+- ✅ Services are for synchronous request-reply patterns
+- ✅ QoS settings control reliability and delivery guarantees
+- ✅ Custom messages and services extend ROS 2 capabilities
+- ✅ CLI tools enable debugging communication issues
+
+---
+
+## Exercises
+
+### Exercise 1: Multi-Robot Status (Basic)
+
+Modify the status publisher to:
+1. Accept `robot_id` as a parameter
+2. Publish to `/robot_status/<robot_id>` (namespaced topic)
+3. Run multiple instances with different IDs
+
+**Test:**
+```bash
+ros2 run robot_monitor status_publisher --ros-args -p robot_id:=robot_1
+ros2 run robot_monitor status_publisher --ros-args -p robot_id:=robot_2
+ros2 topic list  # Should show /robot_status/robot_1 and /robot_status/robot_2
+```
+
+### Exercise 2: Status Aggregator (Intermediate)
+
+Create a node that:
+1. Subscribes to multiple `/robot_status/<id>` topics using wildcards
+2. Publishes a `FleetStatus` message with all robot statuses
+3. Detects when a robot goes offline (no message for 5 seconds)
+
+**Hint:** Use `self.create_subscription()` with a topic pattern.
+
+### Exercise 3: State Machine Service (Advanced)
+
+Implement a state machine service that:
+1. Only allows valid state transitions
+2. Maintains transition history
+3. Provides a `GetStateHistory` service
+4. Publishes state changes to `/state_transitions` topic
+
+**State Machine:**
+```
+IDLE → MOVING → IDLE
+IDLE → CHARGING → IDLE
+ANY → ERROR
+ERROR → IDLE (reset only)
+```
+
+---
+
+## References
+
+1. [ROS 2 Concepts](https://docs.ros.org/en/humble/Concepts.html)
+2. [About Quality of Service Settings](https://docs.ros.org/en/humble/Concepts/About-Quality-of-Service-Settings.html)
+3. [Creating Custom Interfaces](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Custom-ROS2-Interfaces.html)
+4. [Writing a Simple Service and Client](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Writing-A-Simple-Py-Service-And-Client.html)

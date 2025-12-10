@@ -1,0 +1,518 @@
+---
+sidebar_position: 3
+title: Embodied AI Agents
+description: Building end-to-end agents that perceive, reason, and act
+---
+
+# Embodied AI Agents
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Understand the architecture of embodied AI agents
+- Implement perception-reasoning-action loops
+- Build agents that learn from demonstrations
+- Deploy Vision-Language-Action (VLA) models
+- Design feedback mechanisms for adaptive behavior
+
+## Prerequisites
+
+- Completed Chapters 1-2 of this module
+- Understanding of reinforcement learning concepts
+- Experience with deep learning frameworks
+- Familiarity with robot control interfaces
+
+---
+
+## What are Embodied AI Agents?
+
+**Embodied AI** refers to AI systems that:
+- **Perceive** the physical world through sensors
+- **Reason** about goals and constraints
+- **Act** through physical actuators
+- **Learn** from interaction with the environment
+
+```
+              ┌─────────────────────────────────────┐
+              │         Embodied AI Agent           │
+              │                                     │
+   Sensors ──▶│  Perception ──▶ Reasoning ──▶ Action │──▶ Actuators
+              │       ▲                       │      │
+              │       └───── Feedback ◀───────┘      │
+              └─────────────────────────────────────┘
+                              │
+                              ▼
+                        Environment
+```
+
+### VLA Models
+
+**Vision-Language-Action (VLA)** models are end-to-end neural networks:
+
+$$
+\pi(a | o, g) = \text{VLA}(\text{image}, \text{language\_goal})
+$$
+
+Where:
+- $o$ = visual observation (image)
+- $g$ = goal specification (language)
+- $a$ = action (robot commands)
+
+---
+
+## Agent Architecture
+
+### Hierarchical Agent Design
+
+```python title="embodied_agent.py"
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import List, Optional, Any
+import numpy as np
+
+
+@dataclass
+class Observation:
+    """Agent observation from sensors."""
+    image: np.ndarray
+    depth: Optional[np.ndarray] = None
+    joint_positions: Optional[np.ndarray] = None
+    gripper_state: Optional[float] = None
+    timestamp: float = 0.0
+
+
+@dataclass
+class Action:
+    """Robot action command."""
+    type: str  # "cartesian", "joint", "gripper"
+    values: np.ndarray
+    duration: float = 0.1
+
+
+class EmbodiedAgent(ABC):
+    """Base class for embodied AI agents."""
+    
+    @abstractmethod
+    def perceive(self, observation: Observation) -> dict:
+        """Process sensor input into internal representation."""
+        pass
+    
+    @abstractmethod
+    def reason(self, perception: dict, goal: str) -> dict:
+        """Generate plan from perception and goal."""
+        pass
+    
+    @abstractmethod
+    def act(self, plan: dict) -> Action:
+        """Convert plan to executable action."""
+        pass
+    
+    def step(self, observation: Observation, goal: str) -> Action:
+        """Full perception-reasoning-action cycle."""
+        perception = self.perceive(observation)
+        plan = self.reason(perception, goal)
+        action = self.act(plan)
+        return action
+```
+
+### VLA-Based Agent
+
+```python title="vla_agent.py"
+import torch
+from transformers import AutoModelForVision2Seq, AutoProcessor
+
+
+class VLAAgent(EmbodiedAgent):
+    """End-to-end VLA agent for manipulation."""
+    
+    def __init__(
+        self,
+        model_name: str = "openvla/openvla-7b",
+        device: str = "cuda"
+    ):
+        self.device = device
+        
+        # Load VLA model
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        self.model = AutoModelForVision2Seq.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16
+        ).to(device)
+        
+        # Action space configuration
+        self.action_dim = 7  # 6 DOF + gripper
+        self.action_scale = np.array([0.1, 0.1, 0.1, 0.5, 0.5, 0.5, 1.0])
+    
+    def perceive(self, observation: Observation) -> dict:
+        """Encode image for VLA model."""
+        # Preprocess image
+        inputs = self.processor(
+            images=observation.image,
+            return_tensors="pt"
+        ).to(self.device)
+        
+        return {"image_features": inputs}
+    
+    def reason(self, perception: dict, goal: str) -> dict:
+        """Use VLA model to generate action from perception and goal."""
+        # Add language goal
+        inputs = perception["image_features"]
+        inputs["input_ids"] = self.processor(
+            text=goal,
+            return_tensors="pt"
+        ).input_ids.to(self.device)
+        
+        # Generate action tokens
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=self.action_dim,
+                do_sample=True,
+                temperature=0.7
+            )
+        
+        # Decode action from tokens
+        action_tokens = outputs[0, -self.action_dim:]
+        action_values = self.decode_action(action_tokens)
+        
+        return {"action_values": action_values}
+    
+    def act(self, plan: dict) -> Action:
+        """Convert model output to robot action."""
+        values = plan["action_values"]
+        
+        # Scale actions to robot space
+        scaled = values * self.action_scale
+        
+        return Action(
+            type="cartesian",
+            values=scaled[:6],  # Position delta
+            duration=0.1
+        )
+    
+    def decode_action(self, tokens: torch.Tensor) -> np.ndarray:
+        """Decode action tokens to continuous values."""
+        # Model-specific decoding
+        values = tokens.float().cpu().numpy()
+        # Normalize to [-1, 1]
+        values = (values / 255.0) * 2 - 1
+        return values
+```
+
+---
+
+## Learning from Demonstrations
+
+### Imitation Learning Pipeline
+
+```python title="demonstration_collector.py"
+from dataclasses import dataclass
+from typing import List
+import h5py
+import numpy as np
+
+
+@dataclass
+class Demonstration:
+    """Single demonstration trajectory."""
+    observations: List[np.ndarray]  # Images
+    actions: List[np.ndarray]       # Robot actions
+    language_goal: str
+    success: bool
+    metadata: dict
+
+
+class DemonstrationCollector:
+    """Collect demonstrations for imitation learning."""
+    
+    def __init__(self, output_path: str):
+        self.output_path = output_path
+        self.demonstrations = []
+        self.current_demo = None
+    
+    def start_demonstration(self, goal: str):
+        """Begin recording a new demonstration."""
+        self.current_demo = {
+            "observations": [],
+            "actions": [],
+            "language_goal": goal,
+            "metadata": {}
+        }
+    
+    def record_step(self, observation: np.ndarray, action: np.ndarray):
+        """Record a single step."""
+        if self.current_demo is None:
+            raise RuntimeError("No active demonstration")
+        
+        self.current_demo["observations"].append(observation)
+        self.current_demo["actions"].append(action)
+    
+    def end_demonstration(self, success: bool):
+        """Finish and save demonstration."""
+        demo = Demonstration(
+            observations=self.current_demo["observations"],
+            actions=self.current_demo["actions"],
+            language_goal=self.current_demo["language_goal"],
+            success=success,
+            metadata=self.current_demo["metadata"]
+        )
+        
+        self.demonstrations.append(demo)
+        self.current_demo = None
+        
+        return demo
+    
+    def save_to_hdf5(self):
+        """Save all demonstrations to HDF5 file."""
+        with h5py.File(self.output_path, 'w') as f:
+            for i, demo in enumerate(self.demonstrations):
+                grp = f.create_group(f"demo_{i}")
+                grp.create_dataset(
+                    "observations",
+                    data=np.array(demo.observations)
+                )
+                grp.create_dataset(
+                    "actions",
+                    data=np.array(demo.actions)
+                )
+                grp.attrs["language_goal"] = demo.language_goal
+                grp.attrs["success"] = demo.success
+```
+
+### Behavior Cloning Training
+
+```python title="behavior_cloning.py"
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+
+
+class DemonstrationDataset(Dataset):
+    """PyTorch dataset for demonstrations."""
+    
+    def __init__(self, hdf5_path: str, processor):
+        self.processor = processor
+        
+        # Load demonstrations
+        self.data = []
+        with h5py.File(hdf5_path, 'r') as f:
+            for key in f.keys():
+                demo = f[key]
+                obs = demo["observations"][:]
+                actions = demo["actions"][:]
+                goal = demo.attrs["language_goal"]
+                
+                for t in range(len(obs)):
+                    self.data.append({
+                        "image": obs[t],
+                        "action": actions[t],
+                        "goal": goal
+                    })
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        item = self.data[idx]
+        
+        # Process image
+        inputs = self.processor(
+            images=item["image"],
+            text=item["goal"],
+            return_tensors="pt"
+        )
+        
+        return {
+            "pixel_values": inputs.pixel_values.squeeze(0),
+            "input_ids": inputs.input_ids.squeeze(0),
+            "labels": torch.tensor(item["action"], dtype=torch.float32)
+        }
+
+
+class BehaviorCloningTrainer:
+    """Train policy via behavior cloning."""
+    
+    def __init__(self, model, dataset, lr=1e-4):
+        self.model = model
+        self.dataset = dataset
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+        self.loss_fn = nn.MSELoss()
+    
+    def train_epoch(self, batch_size=32):
+        """Train for one epoch."""
+        dataloader = DataLoader(
+            self.dataset,
+            batch_size=batch_size,
+            shuffle=True
+        )
+        
+        total_loss = 0
+        for batch in dataloader:
+            self.optimizer.zero_grad()
+            
+            # Forward pass
+            outputs = self.model(
+                pixel_values=batch["pixel_values"],
+                input_ids=batch["input_ids"]
+            )
+            
+            # Compute loss
+            predicted_actions = outputs.logits[:, -7:]  # Last 7 tokens
+            loss = self.loss_fn(predicted_actions, batch["labels"])
+            
+            # Backward pass
+            loss.backward()
+            self.optimizer.step()
+            
+            total_loss += loss.item()
+        
+        return total_loss / len(dataloader)
+```
+
+---
+
+## Feedback and Adaptation
+
+### Real-Time Error Correction
+
+```python title="adaptive_agent.py"
+class AdaptiveAgent(VLAAgent):
+    """Agent with real-time feedback adaptation."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Feedback history
+        self.action_history = []
+        self.feedback_history = []
+        
+        # Correction model
+        self.correction_scale = 0.5
+    
+    def step_with_feedback(
+        self,
+        observation: Observation,
+        goal: str,
+        feedback: Optional[str] = None
+    ) -> Action:
+        """Step with optional language feedback."""
+        
+        # Incorporate feedback into goal
+        if feedback:
+            goal = f"{goal}. Correction: {feedback}"
+        
+        action = self.step(observation, goal)
+        
+        # Store history
+        self.action_history.append(action)
+        if feedback:
+            self.feedback_history.append(feedback)
+        
+        return action
+    
+    def handle_failure(self, observation: Observation, error: str) -> Action:
+        """Recover from execution failure."""
+        # Generate recovery action
+        recovery_goal = f"Recovery: {error}. Return to safe position."
+        return self.step(observation, recovery_goal)
+```
+
+### Visual Servoing Integration
+
+```python title="visual_servoing.py"
+class VisualServoingAgent(AdaptiveAgent):
+    """Combine VLA with visual servoing for precision."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.servoing_threshold = 0.05  # meters
+    
+    def step_with_servoing(
+        self,
+        observation: Observation,
+        goal: str,
+        target_pose: Optional[np.ndarray] = None
+    ) -> Action:
+        """Use VLA for coarse motion, servoing for fine."""
+        
+        # Get VLA action
+        vla_action = self.step(observation, goal)
+        
+        if target_pose is None:
+            return vla_action
+        
+        # Compute error to target
+        current_pose = observation.joint_positions[:6]
+        error = target_pose - current_pose
+        error_norm = np.linalg.norm(error[:3])
+        
+        if error_norm < self.servoing_threshold:
+            # Switch to visual servoing
+            servoing_action = self.compute_servoing_action(error)
+            return servoing_action
+        
+        return vla_action
+    
+    def compute_servoing_action(self, error: np.ndarray) -> Action:
+        """Proportional visual servoing control."""
+        gain = 0.3
+        correction = gain * error
+        
+        return Action(
+            type="cartesian",
+            values=correction,
+            duration=0.05  # Faster updates for servoing
+        )
+```
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ Embodied AI agents integrate perception, reasoning, and action
+- ✅ VLA models enable end-to-end language-conditioned control
+- ✅ Imitation learning trains policies from demonstrations
+- ✅ Feedback mechanisms enable real-time adaptation
+- ✅ Hierarchical designs combine learned and classical control
+
+---
+
+## Exercises
+
+### Exercise 1: Simple VLA Agent (Basic)
+
+Deploy a pre-trained VLA model that:
+1. Receives camera images
+2. Follows simple language commands
+3. Outputs gripper open/close actions
+4. Logs all decisions for debugging
+
+### Exercise 2: Demonstration Collection (Intermediate)
+
+Build a demonstration system that:
+1. Records teleoperated manipulation
+2. Associates language annotations
+3. Exports to standard formats (HDF5)
+4. Visualizes trajectories
+
+### Exercise 3: Adaptive Manipulation (Advanced)
+
+Create an agent that:
+1. Attempts manipulation with VLA
+2. Detects failure using VLM verification
+3. Generates recovery plans
+4. Retries with corrections
+5. Logs success/failure statistics
+
+---
+
+## References
+
+1. [RT-2: Vision-Language-Action Models](https://arxiv.org/abs/2307.15818)
+2. [OpenVLA: Open-Source VLA](https://openvla.github.io/)
+3. [Behavior Cloning Survey](https://arxiv.org/abs/2309.07979)
+4. [ALOHA: Low-Cost Robot Learning](https://tonyzhaozh.github.io/aloha/)
+5. [RoboCat: Self-Improving Robot](https://arxiv.org/abs/2306.11706)

@@ -1,0 +1,241 @@
+---
+sidebar_position: 3
+title: Unity Robotics Hub
+description: High-fidelity simulation with Unity and ROS 2 integration
+---
+
+# Unity Robotics Hub
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Set up Unity with the Robotics Hub package for ROS 2 integration
+- Import robot models (URDF) into Unity scenes
+- Configure physics and sensor simulation
+- Build custom environments with high-fidelity graphics
+- Stream data between Unity and ROS 2 nodes
+
+## Prerequisites
+
+- Completed Chapters 1-2 of this module
+- Unity 2021.3 LTS or later installed
+- Basic familiarity with Unity Editor
+- ROS 2 Humble environment configured
+
+---
+
+## Why Unity for Robotics?
+
+While Gazebo excels at physics simulation, Unity offers:
+
+- **Photorealistic rendering**: PBR materials, real-time lighting
+- **Large-scale environments**: Optimized for complex scenes
+- **Cross-platform**: Windows, Linux, Mac, AR/VR devices
+- **Asset ecosystem**: Thousands of ready-made environments
+- **ML integration**: Unity ML-Agents for reinforcement learning
+
+### Use Cases
+
+| Scenario | Best Choice |
+|----------|-------------|
+| Physics-accurate testing | Gazebo |
+| Visual perception training | Unity |
+| Synthetic data generation | Both (Unity for visuals) |
+| Navigation algorithm dev | Gazebo |
+| Human-robot interaction | Unity |
+
+---
+
+## Installation
+
+### Unity Hub Setup
+
+1. Download Unity Hub from [unity.com](https://unity.com/download)
+2. Install Unity 2021.3 LTS (or later)
+3. Include "Linux Build Support" for cross-platform
+
+### ROS-TCP-Connector Package
+
+```bash title="Add to Unity Package Manager"
+# In Unity: Window > Package Manager > + > Add package from git URL
+https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector
+```
+
+### URDF Importer Package
+
+```bash title="Add to Unity Package Manager"
+https://github.com/Unity-Technologies/URDF-Importer.git?path=/com.unity.robotics.urdf-importer
+```
+
+### ROS 2 Endpoint
+
+```bash title="Terminal (ROS 2)"
+# Install ROS-TCP-Endpoint
+sudo apt install ros-humble-ros-tcp-endpoint
+
+# Launch endpoint
+ros2 run ros_tcp_endpoint default_server_endpoint
+```
+
+---
+
+## Importing a Robot
+
+### URDF Import Process
+
+1. **Prepare URDF**: Ensure meshes are in supported format (STL, DAE, OBJ)
+2. **Import**: Assets → Import Robot from URDF
+3. **Configure**: Set physics properties, joint limits
+4. **Add controllers**: Attach `ArticulationBody` components
+
+```csharp title="RobotController.cs"
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Geometry;
+
+public class DiffDriveController : MonoBehaviour
+{
+    ROSConnection ros;
+    public ArticulationBody leftWheel;
+    public ArticulationBody rightWheel;
+    public float wheelRadius = 0.1f;
+    public float wheelBase = 0.4f;
+    
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+        ros.Subscribe<TwistMsg>("/cmd_vel", OnCmdVel);
+    }
+    
+    void OnCmdVel(TwistMsg msg)
+    {
+        float linear = (float)msg.linear.x;
+        float angular = (float)msg.angular.z;
+        
+        // Differential drive kinematics
+        float vLeft = (linear - angular * wheelBase / 2) / wheelRadius;
+        float vRight = (linear + angular * wheelBase / 2) / wheelRadius;
+        
+        SetWheelVelocity(leftWheel, vLeft);
+        SetWheelVelocity(rightWheel, vRight);
+    }
+    
+    void SetWheelVelocity(ArticulationBody wheel, float velocity)
+    {
+        var drive = wheel.xDrive;
+        drive.targetVelocity = velocity * Mathf.Rad2Deg;
+        wheel.xDrive = drive;
+    }
+}
+```
+
+---
+
+## Sensor Simulation
+
+### Camera Publisher
+
+```csharp title="CameraPublisher.cs"
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Sensor;
+
+public class CameraPublisher : MonoBehaviour
+{
+    ROSConnection ros;
+    Camera cam;
+    RenderTexture renderTexture;
+    Texture2D texture2D;
+    
+    public string topicName = "/camera/image_raw";
+    public int width = 640;
+    public int height = 480;
+    public float publishRate = 30f;
+    
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+        ros.RegisterPublisher<ImageMsg>(topicName);
+        
+        cam = GetComponent<Camera>();
+        renderTexture = new RenderTexture(width, height, 24);
+        texture2D = new Texture2D(width, height, TextureFormat.RGB24, false);
+        cam.targetTexture = renderTexture;
+        
+        InvokeRepeating("PublishImage", 0f, 1f / publishRate);
+    }
+    
+    void PublishImage()
+    {
+        RenderTexture.active = renderTexture;
+        texture2D.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        texture2D.Apply();
+        RenderTexture.active = null;
+        
+        byte[] data = texture2D.GetRawTextureData();
+        
+        ImageMsg msg = new ImageMsg
+        {
+            header = new RosMessageTypes.Std.HeaderMsg
+            {
+                frame_id = "camera_link"
+            },
+            height = (uint)height,
+            width = (uint)width,
+            encoding = "rgb8",
+            is_bigendian = 0,
+            step = (uint)(width * 3),
+            data = data
+        };
+        
+        ros.Publish(topicName, msg);
+    }
+}
+```
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ Unity provides high-fidelity visual simulation
+- ✅ ROS-TCP-Connector bridges Unity and ROS 2
+- ✅ URDF Importer converts robot models
+- ✅ ArticulationBody enables physics-based control
+- ✅ Custom scripts publish sensor data to ROS 2
+
+---
+
+## Exercises
+
+### Exercise 1: Basic Scene (Basic)
+
+Create a Unity scene with:
+1. Imported TurtleBot3 model
+2. Warehouse environment (floor, walls)
+3. ROS 2 connection for `/cmd_vel`
+
+### Exercise 2: Sensor Suite (Intermediate)
+
+Add to your scene:
+1. RGB camera publishing to ROS 2
+2. Depth camera with point cloud
+3. LiDAR with ray casting
+
+### Exercise 3: Domain Randomization (Advanced)
+
+Implement:
+1. Random lighting conditions
+2. Random object textures
+3. Random camera noise
+4. Export dataset for perception training
+
+---
+
+## References
+
+1. [Unity Robotics Hub](https://github.com/Unity-Technologies/Unity-Robotics-Hub)
+2. [ROS-TCP-Connector](https://github.com/Unity-Technologies/ROS-TCP-Connector)
+3. [URDF Importer](https://github.com/Unity-Technologies/URDF-Importer)
