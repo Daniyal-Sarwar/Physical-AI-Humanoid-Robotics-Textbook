@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[📖 **Read the Book**](https://daniyal-sarwar.github.io/my-ai-book/) · [🐛 Report Bug](https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook/issues) · [✨ Request Feature](https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook/issues)
+[📖 **Read the Book**](https://daniyal-sarwar.github.io/Physical-AI-Humanoid-Robotics-Textbook/) · [🐛 Report Bug](https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook/issues) · [✨ Request Feature](https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook/issues)
 
 </div>
 
@@ -63,7 +63,7 @@ npm install
 npm run start
 ```
 
-The site will be available at `http://localhost:3000/my-ai-book/`
+The site will be available at `http://localhost:3000/Physical-AI-Humanoid-Robotics-Textbook/`
 
 ### Build for Production
 

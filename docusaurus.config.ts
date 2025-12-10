@@ -9,12 +9,12 @@ const config: Config = {
   favicon: "img/favicon.ico",
 
   // GitHub Pages deployment configuration
-  url: "https://your-username.github.io",
-  baseUrl: "/my-ai-book/",
+  url: "https://daniyal-sarwar.github.io",
+  baseUrl: "/Physical-AI-Humanoid-Robotics-Textbook/",
 
   // GitHub Pages deployment settings
-  organizationName: "your-username", // GitHub org/user name
-  projectName: "my-ai-book", // GitHub repo name
+  organizationName: "Daniyal-Sarwar", // GitHub org/user name
+  projectName: "Physical-AI-Humanoid-Robotics-Textbook", // GitHub repo name
   deploymentBranch: "gh-pages",
   trailingSlash: false,
 
@@ -47,7 +47,7 @@ const config: Config = {
           remarkPlugins: [remarkMath],
           rehypePlugins: [rehypeKatex],
           editUrl:
-            "https://github.com/your-username/my-ai-book/tree/main/",
+            "https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook/tree/main/",
         },
         blog: false, // Disable blog
         theme: {
