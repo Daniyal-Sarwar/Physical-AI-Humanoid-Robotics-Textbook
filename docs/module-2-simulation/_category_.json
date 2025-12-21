@@ -1,8 +1,0 @@
-{
-  "label": "Module 2: Digital Twin Simulation",
-  "position": 5,
-  "link": {
-    "type": "generated-index",
-    "description": "Master simulation environments with Gazebo and Unity for robot development and testing."
-  }
-}
