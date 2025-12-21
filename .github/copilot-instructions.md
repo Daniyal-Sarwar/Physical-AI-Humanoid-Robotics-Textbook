@@ -198,22 +198,46 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Basic Project Structure
 
-- `.specify/memory/constitution.md` — Project principles
+- `.specify/memory/constitution.md` — Project principles (Security First, Testing First)
 - `specs/<feature>/spec.md` — Feature requirements
 - `specs/<feature>/plan.md` — Architecture decisions
 - `specs/<feature>/tasks.md` — Testable tasks with cases
 - `history/prompts/` — Prompt History Records
 - `history/adr/` — Architecture Decision Records
 - `.specify/` — SpecKit Plus templates and scripts
+- `backend/` — FastAPI backend (RAG, Auth, Personalization)
+- `docs/` — Docusaurus MDX content
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
 
+**CRITICAL RULES**:
+1. **Security First**: Run Snyk scans on ALL new code before merge
+2. **Testing First**: Write tests BEFORE or alongside implementation
+3. **No Secrets in Code**: Use `.env` files, document in `.env.example`
+
 ## Active Technologies
-- TypeScript 5.x (Docusaurus), Python 3.11 (FastAPI backend) + Docusaurus 3.x, FastAPI, OpenAI Agents SDK, Qdrant Client, React 18 (001-physical-ai-textbook)
-- Qdrant Cloud (vector embeddings), Local MDX files (content) (001-physical-ai-textbook)
-- TypeScript 5.x (Docusaurus) + Docusaurus 3.x, React 18, remark-math, rehype-katex (001-physical-ai-textbook)
-- Static MDX files (content) (001-physical-ai-textbook)
+- Python 3.11, TypeScript 5.x (frontend) + FastAPI, python-jose (JWT), bcrypt, SQLite3, React (Docusaurus) (003-user-auth)
+- SQLite (local file: `./data/users.db`) (003-user-auth)
+
+**Frontend (Docusaurus)**:
+- TypeScript 5.x, React 18, Docusaurus 3.x
+- remark-math, rehype-katex, MDX content
+
+**Backend (FastAPI)**:
+- Python 3.11, FastAPI, Pydantic
+- OpenAI Agents SDK / ChatKit SDK
+- Qdrant Client (vector search)
+- Neon Serverless Postgres (user data)
+- Better-Auth (authentication)
+
+**Infrastructure**:
+- Qdrant Cloud (vector embeddings)
+- Neon (PostgreSQL)
+- GitHub Pages (frontend)
 
 ## Recent Changes
-- 001-physical-ai-textbook: Added TypeScript 5.x (Docusaurus), Python 3.11 (FastAPI backend) + Docusaurus 3.x, FastAPI, OpenAI Agents SDK, Qdrant Client, React 18
+- Constitution v2.0.0: Added Security First and Testing First as non-negotiable principles
+- Added RAG Chatbot Integration Standards (Principle IX)
+- Added Authentication & Personalization Standards (Principle X)
+- Added Backend API Development Standards

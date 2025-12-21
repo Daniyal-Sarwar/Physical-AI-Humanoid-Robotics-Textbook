@@ -128,12 +128,16 @@ const config: Config = {
           items: [
             {
               label: "GitHub",
-              href: "https://github.com/your-username/my-ai-book",
+              href: "https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook",
+            },
+            {
+              label: "Author: Daniyal Sarwar",
+              href: "https://github.com/Daniyal-Sarwar",
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Physical AI & Humanoid Robotics Textbook. Built with Docusaurus.`,
+      copyright: `Physical AI Textbook™ — Copyright © ${new Date().getFullYear()} Created by Daniyal Sarwar. Built with Docusaurus.`,
     },
 
     prism: {

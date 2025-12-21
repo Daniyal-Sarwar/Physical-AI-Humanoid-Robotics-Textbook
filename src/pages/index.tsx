@@ -149,12 +149,15 @@ export default function Home(): React.JSX.Element {
   return (
     <Layout
       title={`Welcome to ${siteConfig.title}`}
-      description="A comprehensive textbook for Physical AI and Humanoid Robotics"
+      description="A comprehensive textbook for Physical AI and Humanoid Robotics. Created by Daniyal Sarwar."
     >
       <HomepageHeader />
       <main>
         <ModulesSection />
         <FeaturesSection />
+        <footer className={styles.trademark}>
+          <p>Physical AI Textbook™ — Created by <a href="https://github.com/Daniyal-Sarwar" target="_blank" rel="noopener noreferrer">Daniyal Sarwar</a></p>
+        </footer>
       </main>
     </Layout>
   );

@@ -1,0 +1,162 @@
+/**
+ * Rate Limit Banner Styles
+ */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+[data-theme='dark'] .banner {
+  background: #374151;
+}
+
+.banner.warning {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.banner.exhausted {
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  flex-direction: column;
+  text-align: center;
+  padding: 1rem;
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.warning .icon {
+  color: #f59e0b;
+}
+
+.exhausted .icon {
+  color: #ef4444;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.title {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+[data-theme='dark'] .title {
+  color: #f3f4f6;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+[data-theme='dark'] .subtitle {
+  color: #9ca3af;
+}
+
+.counter {
+  color: #374151;
+}
+
+[data-theme='dark'] .counter {
+  color: #d1d5db;
+}
+
+.progressBar {
+  flex: 1;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 60px;
+  max-width: 100px;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #eab308);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.signUpLink {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.signUpLink:hover {
+  text-decoration: underline;
+}
+
+.signUpButton {
+  margin-top: 0.5rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.signUpButton:hover {
+  background: #1d4ed8;
+}
+
+/* Dark mode */
+[data-theme='dark'] .banner.warning {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.25);
+}
+
+[data-theme='dark'] .banner.exhausted {
+  background: rgba(244, 67, 54, 0.15);
+  border-color: rgba(244, 67, 54, 0.25);
+}
+
+[data-theme='dark'] .progressBar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Compact mode for chat widget */
+.banner.compact {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.compact .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.compact .content {
+  gap: 0.5rem;
+}

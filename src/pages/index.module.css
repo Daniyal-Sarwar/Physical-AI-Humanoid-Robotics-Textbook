@@ -189,3 +189,28 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Trademark Footer */
+.trademark {
+  text-align: center;
+  padding: 2rem;
+  margin-top: 2rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
+}
+
+.trademark p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.trademark a {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.trademark a:hover {
+  text-decoration: underline;
+}
