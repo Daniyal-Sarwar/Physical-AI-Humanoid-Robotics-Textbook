@@ -41,7 +41,12 @@ const config: Config = {
     [
       "classic",
       {
-        docs: false, // Disabled - docs folder removed
+        docs: {
+          sidebarPath: "./sidebars.ts",
+          routeBasePath: "/",
+          remarkPlugins: [remarkMath],
+          rehypePlugins: [rehypeKatex],
+        },
         blog: false, // Disable blog
         theme: {
           customCss: "./src/css/custom.css",
@@ -61,6 +66,12 @@ const config: Config = {
         src: "img/logo.svg",
       },
       items: [
+        {
+          type: "docSidebar",
+          sidebarId: "tutorialSidebar",
+          position: "left",
+          label: "Book",
+        },
         {
           href: "https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook",
           label: "GitHub",

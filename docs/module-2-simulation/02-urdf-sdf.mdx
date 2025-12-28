@@ -1,0 +1,282 @@
+---
+sidebar_position: 2
+title: URDF and SDF
+description: Robot description formats - modeling links, joints, and visual/collision geometry
+---
+
+# URDF and SDF
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Write URDF files to describe robot kinematics and geometry
+- Convert URDF to SDF for Gazebo simulation
+- Add visual meshes and collision geometry
+- Configure joint limits, dynamics, and transmission
+- Visualize robot models in RViz and Gazebo
+
+## Prerequisites
+
+- Completed Chapter 1: Gazebo Basics
+- Understanding of coordinate frames and transformations
+- Familiarity with XML syntax
+
+---
+
+## Robot Description Formats
+
+### URDF (Unified Robot Description Format)
+
+**URDF** is the ROS-native format for describing robots:
+
+- **Links**: Rigid bodies with visual and collision geometry
+- **Joints**: Connections between links (revolute, prismatic, fixed)
+- **Sensors**: Cameras, LiDAR, IMU attachments
+- **Transmissions**: Motor-to-joint relationships
+
+### SDF (Simulation Description Format)
+
+**SDF** is Gazebo's native format, extending URDF with:
+
+- World description (terrain, lighting, physics)
+- Advanced physics properties
+- Nested models
+- Population and scripting
+
+### When to Use Each
+
+| Format | Use Case |
+|--------|----------|
+| URDF | ROS packages, RViz, MoveIt |
+| SDF | Gazebo worlds, complex simulation |
+| URDF → SDF | Robot in Gazebo (auto-converted) |
+
+---
+
+## URDF Structure
+
+```xml title="simple_robot.urdf"
+<?xml version="1.0"?>
+<robot name="simple_robot">
+  
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.5 0.3 0.1"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.5 0.3 0.1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="10.0"/>
+      <inertia ixx="0.1" ixy="0" ixz="0" 
+               iyy="0.1" iyz="0" izz="0.1"/>
+    </inertial>
+  </link>
+  
+  <!-- Wheel Link -->
+  <link name="left_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" 
+               iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  
+  <!-- Joint -->
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+    <origin xyz="0.15 0.175 0" rpy="1.5708 0 0"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+  
+</robot>
+```
+
+---
+
+## Joint Types
+
+| Type | Motion | DOF | Example |
+|------|--------|-----|---------|
+| `revolute` | Rotation with limits | 1 | Arm joint |
+| `continuous` | Unlimited rotation | 1 | Wheel |
+| `prismatic` | Linear translation | 1 | Elevator |
+| `fixed` | No motion | 0 | Sensor mount |
+| `floating` | 6-DOF free motion | 6 | Drone |
+| `planar` | Motion in a plane | 2 | Holonomic base |
+
+```xml title="Joint Examples"
+<!-- Revolute joint with limits -->
+<joint name="shoulder" type="revolute">
+  <parent link="base"/>
+  <child link="upper_arm"/>
+  <origin xyz="0 0 0.5" rpy="0 0 0"/>
+  <axis xyz="0 1 0"/>
+  <limit lower="-1.57" upper="1.57" 
+         effort="100" velocity="1.0"/>
+</joint>
+
+<!-- Prismatic joint -->
+<joint name="lift" type="prismatic">
+  <parent link="base"/>
+  <child link="platform"/>
+  <axis xyz="0 0 1"/>
+  <limit lower="0" upper="1.0" 
+         effort="500" velocity="0.5"/>
+</joint>
+```
+
+---
+
+## Xacro: URDF Macros
+
+**Xacro** adds programming constructs to URDF:
+
+```xml title="robot.urdf.xacro"
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="my_robot">
+  
+  <!-- Properties (variables) -->
+  <xacro:property name="wheel_radius" value="0.1"/>
+  <xacro:property name="wheel_width" value="0.05"/>
+  <xacro:property name="base_length" value="0.5"/>
+  
+  <!-- Macro definition -->
+  <xacro:macro name="wheel" params="prefix x_offset y_offset">
+    <link name="${prefix}_wheel">
+      <visual>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </visual>
+    </link>
+    
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${prefix}_wheel"/>
+      <origin xyz="${x_offset} ${y_offset} 0" rpy="1.5708 0 0"/>
+      <axis xyz="0 0 1"/>
+    </joint>
+  </xacro:macro>
+  
+  <!-- Base link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="${base_length} 0.3 0.1"/>
+      </geometry>
+    </visual>
+  </link>
+  
+  <!-- Use macros to create wheels -->
+  <xacro:wheel prefix="front_left" x_offset="0.15" y_offset="0.175"/>
+  <xacro:wheel prefix="front_right" x_offset="0.15" y_offset="-0.175"/>
+  <xacro:wheel prefix="rear_left" x_offset="-0.15" y_offset="0.175"/>
+  <xacro:wheel prefix="rear_right" x_offset="-0.15" y_offset="-0.175"/>
+  
+</robot>
+```
+
+```bash title="Process Xacro"
+# Convert xacro to URDF
+xacro robot.urdf.xacro > robot.urdf
+
+# Validate URDF
+check_urdf robot.urdf
+```
+
+---
+
+## Visualization
+
+### RViz
+
+```bash title="Terminal"
+# Launch robot state publisher
+ros2 launch urdf_tutorial display.launch.py model:=robot.urdf
+
+# Or use robot_state_publisher
+ros2 run robot_state_publisher robot_state_publisher \
+    --ros-args -p robot_description:="$(xacro robot.urdf.xacro)"
+```
+
+### Gazebo
+
+```bash title="Terminal"
+# Spawn robot in Gazebo
+ros2 run gazebo_ros spawn_entity.py \
+    -entity my_robot \
+    -topic robot_description
+```
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ URDF describes robot structure with links and joints
+- ✅ SDF extends URDF for simulation environments
+- ✅ Xacro adds macros and variables to reduce repetition
+- ✅ Joint types define degrees of freedom
+- ✅ Visualization tools verify model correctness
+
+---
+
+## Exercises
+
+### Exercise 1: Simple Arm (Basic)
+
+Create a 2-DOF planar arm with:
+1. Base link (fixed to world)
+2. Upper arm link (0.3m)
+3. Lower arm link (0.25m)
+4. Two revolute joints
+
+### Exercise 2: Mobile Base (Intermediate)
+
+Create a differential drive base with:
+1. Rectangular body
+2. Two driven wheels
+3. One caster wheel
+4. LiDAR mount on top
+
+### Exercise 3: Sensor Integration (Advanced)
+
+Add to your mobile base:
+1. RGB camera with proper TF frame
+2. Depth camera
+3. IMU sensor
+4. Gazebo plugins for all sensors
+
+---
+
+## References
+
+1. [URDF Documentation](https://wiki.ros.org/urdf)
+2. [Xacro Documentation](https://wiki.ros.org/xacro)
+3. [SDF Specification](http://sdformat.org/spec)

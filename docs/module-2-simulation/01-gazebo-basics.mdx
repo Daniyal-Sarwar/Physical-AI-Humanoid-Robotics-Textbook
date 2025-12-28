@@ -1,0 +1,255 @@
+---
+sidebar_position: 1
+title: Gazebo Basics
+description: Introduction to Gazebo simulation for robotics - physics, sensors, and world creation
+---
+
+# Gazebo Basics
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Install and configure Gazebo Harmonic with ROS 2 Humble
+- Create simulation worlds with terrain, objects, and lighting
+- Spawn robot models into simulation
+- Simulate common sensors (camera, LiDAR, IMU)
+- Bridge Gazebo topics to ROS 2
+
+## Prerequisites
+
+- Completed Module 1: ROS 2 Fundamentals
+- Ubuntu 22.04 with ROS 2 Humble installed
+- Basic understanding of 3D coordinate systems
+- Familiarity with XML/SDF syntax
+
+---
+
+## What is Gazebo?
+
+**Gazebo** is an open-source 3D robotics simulator that provides:
+
+- **Physics simulation**: Accurate dynamics, collisions, and contact forces
+- **Sensor simulation**: Cameras, LiDAR, IMU, GPS, and more
+- **Environment modeling**: Terrain, lighting, weather effects
+- **ROS 2 integration**: Seamless communication with robot software
+
+### Gazebo Versions
+
+| Version | Status | ROS 2 Support |
+|---------|--------|---------------|
+| Gazebo Classic (11) | Legacy | Foxy, Galactic |
+| Ignition Fortress | LTS | Humble |
+| Gazebo Harmonic | Latest | Humble, Iron |
+
+:::tip Recommendation
+This book uses **Gazebo Harmonic** (previously called Ignition Gazebo) with ROS 2 Humble.
+:::
+
+---
+
+## Installation
+
+```bash title="Terminal"
+# Install Gazebo Harmonic
+sudo apt-get update
+sudo apt-get install gz-harmonic
+
+# Install ROS 2 - Gazebo bridge
+sudo apt-get install ros-humble-ros-gz
+
+# Verify installation
+gz sim --version
+```
+
+---
+
+## Your First Simulation
+
+### Launching Gazebo
+
+```bash title="Terminal"
+# Launch empty world
+gz sim empty.sdf
+
+# Launch with a pre-built world
+gz sim shapes.sdf
+```
+
+### World File Structure
+
+```xml title="my_world.sdf"
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="my_world">
+    
+    <!-- Physics configuration -->
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    
+    <!-- Lighting -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    
+    <!-- Ground plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+  </world>
+</sdf>
+```
+
+---
+
+## Sensor Simulation
+
+### Camera Sensor
+
+```xml title="camera.sdf"
+<sensor name="camera" type="camera">
+  <pose>0 0 0.5 0 0 0</pose>
+  <camera>
+    <horizontal_fov>1.047</horizontal_fov>
+    <image>
+      <width>640</width>
+      <height>480</height>
+      <format>R8G8B8</format>
+    </image>
+    <clip>
+      <near>0.1</near>
+      <far>100</far>
+    </clip>
+  </camera>
+  <always_on>1</always_on>
+  <update_rate>30</update_rate>
+  <visualize>true</visualize>
+</sensor>
+```
+
+### LiDAR Sensor
+
+```xml title="lidar.sdf"
+<sensor name="lidar" type="gpu_lidar">
+  <pose>0 0 0.3 0 0 0</pose>
+  <lidar>
+    <scan>
+      <horizontal>
+        <samples>360</samples>
+        <resolution>1</resolution>
+        <min_angle>-3.14159</min_angle>
+        <max_angle>3.14159</max_angle>
+      </horizontal>
+    </scan>
+    <range>
+      <min>0.1</min>
+      <max>30.0</max>
+    </range>
+  </lidar>
+  <always_on>1</always_on>
+  <update_rate>10</update_rate>
+</sensor>
+```
+
+---
+
+## ROS 2 Bridge
+
+The `ros_gz_bridge` connects Gazebo topics to ROS 2:
+
+```bash title="Terminal"
+# Bridge a topic
+ros2 run ros_gz_bridge parameter_bridge \
+    /camera@sensor_msgs/msg/Image@gz.msgs.Image
+
+# Bridge with YAML config
+ros2 run ros_gz_bridge parameter_bridge \
+    --ros-args -p config_file:=bridge.yaml
+```
+
+```yaml title="bridge.yaml"
+- topic_name: /camera/image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+
+- topic_name: /cmd_vel
+  ros_type_name: geometry_msgs/msg/Twist
+  gz_type_name: gz.msgs.Twist
+  direction: ROS_TO_GZ
+```
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ Gazebo provides physics and sensor simulation for robotics
+- ✅ SDF files define worlds, models, and sensors
+- ✅ The ros_gz_bridge connects Gazebo to ROS 2
+- ✅ How to configure common sensors (camera, LiDAR)
+
+---
+
+## Exercises
+
+### Exercise 1: Custom World (Basic)
+
+Create a warehouse world with:
+1. Ground plane with checkered texture
+2. Four walls forming a 10m x 10m room
+3. Three box obstacles at different positions
+4. Point light in the center
+
+### Exercise 2: Sensor Configuration (Intermediate)
+
+Add to your warehouse:
+1. A camera mounted at 2m height looking down
+2. A LiDAR at 0.5m height
+3. Bridge both to ROS 2 topics
+4. Visualize in RViz
+
+### Exercise 3: Dynamic Objects (Advanced)
+
+Create a world with:
+1. A conveyor belt (moving surface)
+2. Boxes that spawn and move on the conveyor
+3. A robot that can "pick" boxes (delete on contact)
+
+---
+
+## References
+
+1. [Gazebo Documentation](https://gazebosim.org/docs)
+2. [SDF Specification](http://sdformat.org/spec)
+3. [ros_gz Repository](https://github.com/gazebosim/ros_gz)

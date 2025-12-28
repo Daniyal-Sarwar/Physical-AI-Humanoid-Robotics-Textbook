@@ -1,0 +1,402 @@
+---
+sidebar_position: 1
+title: Introduction to ROS 2
+description: Getting started with Robot Operating System 2 - installation, concepts, and your first nodes
+---
+
+# Introduction to ROS 2
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Explain the architecture and design principles of ROS 2
+- Install ROS 2 Humble on Ubuntu 22.04
+- Create and run your first ROS 2 nodes
+- Use essential ROS 2 command-line tools
+- Understand the differences between ROS 1 and ROS 2
+
+## Prerequisites
+
+- Ubuntu 22.04 LTS (native or WSL2)
+- Basic Python programming knowledge
+- Command-line familiarity
+- Git version control basics
+
+---
+
+## What is ROS 2?
+
+**Robot Operating System 2 (ROS 2)** is an open-source framework for building robot software. Despite its name, ROS 2 is not an operating system—it's a middleware that provides:
+
+- **Hardware abstraction**: Write code once, run on different robots
+- **Device drivers**: Interfaces for common sensors and actuators
+- **Communication middleware**: Message passing between components
+- **Libraries**: Common algorithms for navigation, manipulation, perception
+- **Tools**: Visualization, debugging, simulation integration
+
+### Why ROS 2?
+
+ROS 2 was built from the ground up to address limitations of ROS 1:
+
+| Feature | ROS 1 | ROS 2 |
+|---------|-------|-------|
+| Real-time support | Limited | Yes (via DDS) |
+| Multi-robot | Difficult | Native support |
+| Security | None | DDS-Security |
+| Embedded systems | No | Yes (micro-ROS) |
+| Windows support | Experimental | Official |
+| Python version | 2.7 | 3.10+ |
+
+### ROS 2 Distributions
+
+| Distribution | Release | EOL | Ubuntu |
+|--------------|---------|-----|--------|
+| Humble Hawksbill | May 2022 | May 2027 | 22.04 |
+| Iron Irwini | May 2023 | Nov 2024 | 22.04 |
+| Jazzy Jalisco | May 2024 | May 2029 | 24.04 |
+
+:::tip Recommendation
+This book uses **ROS 2 Humble** (LTS) for all examples. Humble provides the best balance of stability and long-term support.
+:::
+
+---
+
+## Architecture Overview
+
+### The Computational Graph
+
+ROS 2 applications are organized as a **computational graph** of processes called *nodes* that communicate via:
+
+```
+┌─────────┐    Topics    ┌─────────┐
+│  Node A │ ──────────▶  │  Node B │
+│(Sensor) │   /scan      │ (SLAM)  │
+└─────────┘              └─────────┘
+                              │
+                              │ Topics
+                              │ /map
+                              ▼
+                         ┌─────────┐
+                         │  Node C │
+                         │ (Nav)   │
+                         └─────────┘
+```
+
+### Key Concepts
+
+1. **Nodes**: Modular processes that perform computation
+2. **Topics**: Named channels for publish-subscribe messaging
+3. **Services**: Synchronous request-reply communication
+4. **Actions**: Asynchronous long-running tasks with feedback
+5. **Parameters**: Runtime configuration values
+
+### DDS: The Communication Layer
+
+ROS 2 uses **Data Distribution Service (DDS)** as its middleware:
+
+- **Decentralized**: No single point of failure (no `roscore`)
+- **Discovery**: Nodes find each other automatically
+- **QoS**: Configurable reliability, durability, and timing
+- **Standard**: OMG specification, multiple implementations
+
+---
+
+## Installation
+
+### Installing ROS 2 Humble on Ubuntu 22.04
+
+```bash title="Terminal"
+# Set locale
+sudo apt update && sudo apt install locales
+sudo locale-gen en_US en_US.UTF-8
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+
+# Add ROS 2 apt repository
+sudo apt install software-properties-common
+sudo add-apt-repository universe
+sudo apt update && sudo apt install curl -y
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# Install ROS 2 Humble
+sudo apt update
+sudo apt install ros-humble-desktop
+
+# Source the environment
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Verify Installation
+
+```bash title="Terminal"
+# Check ROS 2 version
+ros2 --version
+
+# Run demo talker
+ros2 run demo_nodes_cpp talker
+```
+
+In another terminal:
+
+```bash title="Terminal"
+# Run demo listener
+ros2 run demo_nodes_cpp listener
+```
+
+You should see messages being exchanged!
+
+---
+
+## Your First Node
+
+### Package Structure
+
+ROS 2 code is organized into **packages**:
+
+```
+my_robot_pkg/
+├── package.xml           # Package metadata
+├── setup.py              # Python build config
+├── setup.cfg             # Entry points config
+├── resource/
+│   └── my_robot_pkg      # Marker file
+├── my_robot_pkg/
+│   ├── __init__.py
+│   └── my_node.py        # Node implementation
+└── test/                 # Unit tests
+```
+
+### Creating a Package
+
+```bash title="Terminal"
+# Create workspace
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+# Create package
+ros2 pkg create --build-type ament_python my_first_pkg \
+    --dependencies rclpy std_msgs
+```
+
+### Writing a Publisher Node
+
+```python title="my_first_pkg/my_publisher.py"
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class MinimalPublisher(Node):
+    """A minimal ROS 2 publisher node."""
+
+    def __init__(self):
+        super().__init__('minimal_publisher')
+        
+        # Create publisher
+        self.publisher_ = self.create_publisher(
+            String,           # Message type
+            'chatter',        # Topic name
+            10                # Queue size (QoS depth)
+        )
+        
+        # Create timer for periodic publishing
+        timer_period = 0.5  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.i = 0
+
+    def timer_callback(self):
+        """Publish a message on each timer tick."""
+        msg = String()
+        msg.data = f'Hello, ROS 2! Count: {self.i}'
+        self.publisher_.publish(msg)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
+        self.i += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    node = MinimalPublisher()
+    
+    try:
+        rclpy.spin(node)  # Keep node running
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Writing a Subscriber Node
+
+```python title="my_first_pkg/my_subscriber.py"
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class MinimalSubscriber(Node):
+    """A minimal ROS 2 subscriber node."""
+
+    def __init__(self):
+        super().__init__('minimal_subscriber')
+        
+        # Create subscription
+        self.subscription = self.create_subscription(
+            String,                    # Message type
+            'chatter',                 # Topic name
+            self.listener_callback,    # Callback function
+            10                         # Queue size
+        )
+
+    def listener_callback(self, msg: String):
+        """Process received messages."""
+        self.get_logger().info(f'Received: "{msg.data}"')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    node = MinimalSubscriber()
+    
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Building and Running
+
+```bash title="Terminal"
+# Build the package
+cd ~/ros2_ws
+colcon build --packages-select my_first_pkg
+
+# Source the workspace
+source install/setup.bash
+
+# Run publisher (Terminal 1)
+ros2 run my_first_pkg my_publisher
+
+# Run subscriber (Terminal 2)
+ros2 run my_first_pkg my_subscriber
+```
+
+---
+
+## Essential CLI Tools
+
+### Introspection Commands
+
+```bash title="Terminal"
+# List running nodes
+ros2 node list
+
+# Get node info
+ros2 node info /minimal_publisher
+
+# List topics
+ros2 topic list
+
+# Show topic info
+ros2 topic info /chatter
+
+# Echo messages on a topic
+ros2 topic echo /chatter
+
+# Publish a message manually
+ros2 topic pub /chatter std_msgs/msg/String "data: 'Hello from CLI'"
+```
+
+### Visualization
+
+```bash title="Terminal"
+# View computation graph
+ros2 run rqt_graph rqt_graph
+
+# Launch RViz for 3D visualization
+rviz2
+```
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ ROS 2 is a middleware framework, not an operating system
+- ✅ ROS 2 uses DDS for decentralized, real-time communication
+- ✅ Nodes are modular processes that communicate via topics, services, and actions
+- ✅ How to install ROS 2 Humble on Ubuntu 22.04
+- ✅ How to create packages and write publisher/subscriber nodes
+- ✅ Essential CLI tools for introspection and debugging
+
+---
+
+## Exercises
+
+### Exercise 1: Hello Robot (Basic)
+
+Create a node that publishes custom messages to a topic called `/robot_status` with the message type `String`. The message should include a timestamp and a status indicator.
+
+**Requirements:**
+- Message format: `"[TIMESTAMP] Status: ACTIVE"`
+- Publish every 1 second
+- Use `self.get_clock().now()` for timestamp
+
+<details>
+<summary>💡 Hint</summary>
+
+```python
+timestamp = self.get_clock().now().to_msg()
+msg.data = f"[{timestamp.sec}.{timestamp.nanosec}] Status: ACTIVE"
+```
+
+</details>
+
+### Exercise 2: Message Counter (Intermediate)
+
+Create a subscriber node that:
+1. Subscribes to `/chatter`
+2. Counts the number of messages received
+3. Publishes the count to `/message_count` (type: `std_msgs/Int32`)
+
+**Requirements:**
+- The node should be both a subscriber AND a publisher
+- Count should increment with each received message
+
+### Exercise 3: Node Parameters (Advanced)
+
+Modify your publisher node to:
+1. Accept a parameter `publish_rate` (default: 2.0 Hz)
+2. Accept a parameter `message_prefix` (default: "Hello")
+3. Allow parameters to be changed at runtime
+
+**Requirements:**
+- Use `self.declare_parameter()` to declare parameters
+- Use `self.get_parameter()` to read values
+- Test with: `ros2 param set /minimal_publisher publish_rate 5.0`
+
+---
+
+## References
+
+1. [ROS 2 Documentation](https://docs.ros.org/en/humble/)
+2. [ROS 2 Tutorials](https://docs.ros.org/en/humble/Tutorials.html)
+3. [The ROS 2 Design](https://design.ros2.org/)
+4. [DDS Foundation](https://www.omg.org/dds/)
+5. Macenski, S. et al. "Robot Operating System 2: Design, Architecture, and Uses In The Wild." *Science Robotics*, 2022.
