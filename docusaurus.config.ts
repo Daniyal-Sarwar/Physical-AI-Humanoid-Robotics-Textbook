@@ -8,9 +8,9 @@ const config: Config = {
   tagline: "A comprehensive guide to modern robotics software development",
   favicon: "img/favicon.ico",
 
-  // GitHub Pages deployment configuration
-  url: "https://daniyal-sarwar.github.io",
-  baseUrl: "/Physical-AI-Humanoid-Robotics-Textbook/",
+  // Vercel deployment configuration
+  url: "https://your-vercel-domain.vercel.app",
+  baseUrl: "/",
 
   // GitHub Pages deployment settings
   organizationName: "Daniyal-Sarwar", // GitHub org/user name
