@@ -41,14 +41,7 @@ const config: Config = {
     [
       "classic",
       {
-        docs: {
-          sidebarPath: "./sidebars.ts",
-          routeBasePath: "/", // Docs as homepage
-          remarkPlugins: [remarkMath],
-          rehypePlugins: [rehypeKatex],
-          editUrl:
-            "https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook/tree/main/",
-        },
+        docs: false, // Disabled - docs folder removed
         blog: false, // Disable blog
         theme: {
           customCss: "./src/css/custom.css",
@@ -69,13 +62,7 @@ const config: Config = {
       },
       items: [
         {
-          type: "docSidebar",
-          sidebarId: "tutorialSidebar",
-          position: "left",
-          label: "Book",
-        },
-        {
-          href: "https://github.com/your-username/my-ai-book",
+          href: "https://github.com/Daniyal-Sarwar/Physical-AI-Humanoid-Robotics-Textbook",
           label: "GitHub",
           position: "right",
         },
@@ -85,44 +72,6 @@ const config: Config = {
     footer: {
       style: "dark",
       links: [
-        {
-          title: "Book",
-          items: [
-            {
-              label: "Introduction",
-              to: "/intro",
-            },
-            {
-              label: "Glossary",
-              to: "/glossary",
-            },
-            {
-              label: "Notation",
-              to: "/notation",
-            },
-          ],
-        },
-        {
-          title: "Modules",
-          items: [
-            {
-              label: "Module 1: ROS 2 Fundamentals",
-              to: "/module-1-ros2/introduction",
-            },
-            {
-              label: "Module 2: Digital Twin Simulation",
-              to: "/module-2-simulation/gazebo-basics",
-            },
-            {
-              label: "Module 3: NVIDIA Isaac Platform",
-              to: "/module-3-isaac/isaac-sim-intro",
-            },
-            {
-              label: "Module 4: Vision-Language-Action",
-              to: "/module-4-vla/voice-to-action",
-            },
-          ],
-        },
         {
           title: "More",
           items: [
